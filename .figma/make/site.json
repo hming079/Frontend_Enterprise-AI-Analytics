@@ -1,0 +1,10 @@
+{
+  "description": "An AI-powered analytics platform for retail businesses that enables users to query data in Vietnamese, visualize results, and access internal knowledge seamlessly.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
