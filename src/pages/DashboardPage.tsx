@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, BarChart2,
-  Sparkles, ArrowRight, AlertTriangle, ArrowLeft, LayoutDashboard, Activity, Map, Box
+  ArrowRight, ArrowLeft, LayoutDashboard, Activity, Map, Box, GripHorizontal, Plus, X
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -31,6 +31,23 @@ const kpiCards = [
   { label: 'Avg. Order Value', value: '$51.42', change: '+3.6%', positive: true, icon: BarChart2, color: 'text-amber-600', bg: 'bg-amber-50', sub: 'vs. previous period' },
 ];
 
+// ─── MASTER LIST CÁC WIDGET ────────────────────────────────────────────────
+const ALL_WIDGETS = [
+  { id: 'revenue', span: 'lg:col-span-4', title: 'Revenue Trend', desc: 'Monthly revenue and order volume' },
+  { id: 'inventory', span: 'lg:col-span-2', title: 'Inventory Health', desc: 'Current stock status' },
+  { id: 'category', span: 'lg:col-span-3', title: 'Sales by Category', desc: 'Revenue by product category' },
+  { id: 'store', span: 'lg:col-span-3', title: 'Store Performance', desc: 'Store target completion' },
+  { id: 'top-products', span: 'lg:col-span-6', title: 'Top Products', desc: 'Best selling items of the month' },
+];
+
+// Cấu hình Widgets ban đầu hiển thị trên màn hình
+const initialWidgets = [
+  { id: 'revenue', span: 'lg:col-span-4' },
+  { id: 'inventory', span: 'lg:col-span-2' },
+  { id: 'category', span: 'lg:col-span-3' },
+  { id: 'store', span: 'lg:col-span-3' },
+];
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -48,14 +65,69 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function DashboardPage({ userName, userRole, onNavigate }: DashboardPageProps) {
-  // Trạng thái lưu Dashboard đang được chọn. Nếu null -> Hiển thị danh sách Dashboard.
   const [activeDashboard, setActiveDashboard] = useState<string | null>(null);
+
+  // State quản lý Widgets
+  const [widgets, setWidgets] = useState(initialWidgets);
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+
+  // Đóng menu Add Widget khi click ra ngoài
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setIsAddMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const greeting = () => {
     const h = new Date().getHours();
     if (h < 12) return 'Good morning';
     if (h < 18) return 'Good afternoon';
     return 'Good evening';
+  };
+
+  // ─── XỬ LÝ THÊM / XÓA WIDGET ────────────────────────────────────────────────
+  const availableToAdd = ALL_WIDGETS.filter(w => !widgets.find(active => active.id === w.id));
+
+  const handleAddWidget = (widgetId: string) => {
+    const widgetToAdd = ALL_WIDGETS.find(w => w.id === widgetId);
+    if (widgetToAdd) {
+      setWidgets([...widgets, { id: widgetToAdd.id, span: widgetToAdd.span }]);
+    }
+    setIsAddMenuOpen(false);
+  };
+
+  const handleRemoveWidget = (widgetId: string) => {
+    setWidgets(widgets.filter(w => w.id !== widgetId));
+  };
+
+  // ─── XỬ LÝ SỰ KIỆN KÉO THẢ ──────────────────────────────────────────────────
+  const onDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIdx(index);
+    e.dataTransfer.setData('text/plain', index.toString());
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const onDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIdx === null || draggedIdx === index) return;
+
+    const newWidgets = [...widgets];
+    const draggedItem = newWidgets[draggedIdx];
+    newWidgets.splice(draggedIdx, 1);
+    newWidgets.splice(index, 0, draggedItem);
+
+    setDraggedIdx(index);
+    setWidgets(newWidgets);
+  };
+
+  const onDragEnd = () => {
+    setDraggedIdx(null);
   };
 
   // ─── GIAO DIỆN 1: Quản lý / Chọn Dashboard ────────────────────────────────
@@ -96,24 +168,58 @@ export default function DashboardPage({ userName, userRole, onNavigate }: Dashbo
     );
   }
 
-  // Lấy thông tin Dashboard đang chọn để hiển thị tiêu đề
   const currentDbInfo = availableDashboards.find(db => db.id === activeDashboard);
 
   // ─── GIAO DIỆN 2: Chi tiết Dashboard đã chọn ──────────────────────────────
   return (
     <div className="p-6 space-y-6 animate-fade-in">
-      {/* Nút Back & Tiêu đề */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => setActiveDashboard(null)}
-          className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
-          title="Quay lại danh sách Dashboard"
-        >
-          <ArrowLeft size={16} />
-        </button>
-        <div>
-          <h2 className="text-xl font-700 text-slate-900">{currentDbInfo?.title || 'Dashboard'}</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Dữ liệu được cập nhật tự động cho kỳ báo cáo hiện tại.</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setActiveDashboard(null)}
+            className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors"
+            title="Quay lại danh sách Dashboard"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <div>
+            <h2 className="text-xl font-700 text-slate-900">{currentDbInfo?.title || 'Dashboard'}</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Dữ liệu được cập nhật tự động cho kỳ báo cáo hiện tại.</p>
+          </div>
+        </div>
+
+        {/* Nút Add Widget */}
+        <div className="relative" ref={addMenuRef}>
+          <button
+            onClick={() => setIsAddMenuOpen(!isAddMenuOpen)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-600 rounded-lg transition-colors"
+          >
+            <Plus size={14} /> Add Widget
+          </button>
+
+          {isAddMenuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-lg py-2 z-20 animate-fade-in">
+              <div className="px-4 py-2 border-b border-slate-100 mb-2">
+                <p className="text-xs font-600 text-slate-900">Available Widgets</p>
+              </div>
+              {availableToAdd.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-slate-500 italic text-center">
+                  All widgets are already added.
+                </div>
+              ) : (
+                availableToAdd.map(w => (
+                  <button
+                    key={w.id}
+                    onClick={() => handleAddWidget(w.id)}
+                    className="w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors flex flex-col group"
+                  >
+                    <span className="text-xs font-600 text-slate-900 group-hover:text-indigo-600">{w.title}</span>
+                    <span className="text-[10px] text-slate-500">{w.desc}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -140,110 +246,157 @@ export default function DashboardPage({ userName, userRole, onNavigate }: Dashbo
         })}
       </div>
 
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Revenue Trend */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-5">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h3 className="text-sm font-600 text-slate-900">Revenue Trend</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Monthly revenue and order volume</p>
-            </div>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={revenueTrendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#4338CA" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#4338CA" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#4338CA" strokeWidth={2} fill="url(#revGrad)" dot={false} activeDot={{ r: 4, fill: '#4338CA' }} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Draggable Widgets Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
+        {widgets.map((widget, index) => {
+          // Lấy thông tin widget từ ALL_WIDGETS để hiển thị Title chung
+          const widgetInfo = ALL_WIDGETS.find(w => w.id === widget.id);
 
-        {/* Inventory Status */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <div className="mb-5">
-            <h3 className="text-sm font-600 text-slate-900">Inventory Health</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Current stock status</p>
-          </div>
-          <ResponsiveContainer width="100%" height={140}>
-            <PieChart>
-              <Pie data={inventoryStatus} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value">
-                {inventoryStatus.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(v) => `${v}%`} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-2 mt-2">
-            {inventoryStatus.map(s => (
-              <div key={s.name} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
-                  <span className="text-xs text-slate-600">{s.name}</span>
+          return (
+            <div
+              key={widget.id}
+              draggable
+              onDragStart={(e) => onDragStart(e, index)}
+              onDragOver={(e) => onDragOver(e, index)}
+              onDragEnd={onDragEnd}
+              className={`${widget.span} bg-white rounded-xl border border-slate-200 p-5 shadow-sm transition-all duration-200 ${draggedIdx === index ? 'opacity-40 scale-[0.98] border-indigo-400 border-dashed z-10' : 'opacity-100 hover:border-slate-300'
+                }`}
+            >
+              {/* Common Header cho mọi Widget */}
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h3 className="text-sm font-600 text-slate-900">{widgetInfo?.title}</h3>
+                  {widgetInfo?.desc && <p className="text-xs text-slate-400 mt-0.5">{widgetInfo.desc}</p>}
                 </div>
-                <span className="text-xs font-500 text-slate-900">{s.value}%</span>
+                <div className="flex items-center gap-1">
+                  <div className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md cursor-move">
+                    <GripHorizontal size={14} />
+                  </div>
+                  <button
+                    onClick={() => handleRemoveWidget(widget.id)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
 
-      {/* Sales by Category + Store Performance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Category Bar */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <div className="mb-5">
-            <h3 className="text-sm font-600 text-slate-900">Sales by Category</h3>
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={categoryData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
-              <YAxis type="category" dataKey="category" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} width={110} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="revenue" name="Revenue" fill="#4338CA" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+              {/* Nội dung cụ thể của từng Widget */}
+              {widget.id === 'revenue' && (
+                <ResponsiveContainer width="100%" height={200}>
+                  <AreaChart data={revenueTrendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4338CA" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="#4338CA" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#4338CA" strokeWidth={2} fill="url(#revGrad)" dot={false} activeDot={{ r: 4, fill: '#4338CA' }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
 
-        {/* Store Performance */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <div className="mb-4">
-            <h3 className="text-sm font-600 text-slate-900">Store Performance</h3>
-          </div>
-          <div className="space-y-3">
-            {storePerformance.map(store => {
-              const pct = Math.round((store.revenue / store.target) * 100);
-              const onTarget = pct >= 100;
-              return (
-                <div key={store.store}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-slate-700 font-500 truncate max-w-[180px]">{store.store}</span>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-500 ${onTarget ? 'text-emerald-600' : 'text-amber-600'}`}>{pct}%</span>
-                      <span className="text-xs font-500 text-slate-900">${(store.revenue / 1000).toFixed(0)}K</span>
-                    </div>
+              {widget.id === 'inventory' && (
+                <>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <PieChart>
+                      <Pie data={inventoryStatus} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={3} dataKey="value">
+                        {inventoryStatus.map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v) => `${v}%`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="space-y-2 mt-2">
+                    {inventoryStatus.map(s => (
+                      <div key={s.name} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
+                          <span className="text-xs text-slate-600">{s.name}</span>
+                        </div>
+                        <span className="text-xs font-500 text-slate-900">{s.value}%</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${onTarget ? 'bg-emerald-500' : 'bg-amber-400'}`}
-                      style={{ width: `${Math.min(pct, 100)}%` }}
-                    />
-                  </div>
+                </>
+              )}
+
+              {widget.id === 'category' && (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={categoryData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}K`} />
+                    <YAxis type="category" dataKey="category" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} width={110} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="revenue" name="Revenue" fill="#4338CA" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+
+              {widget.id === 'store' && (
+                <div className="space-y-3">
+                  {storePerformance.map(store => {
+                    const pct = Math.round((store.revenue / store.target) * 100);
+                    const onTarget = pct >= 100;
+                    return (
+                      <div key={store.store}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-slate-700 font-500 truncate max-w-[180px]">{store.store}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-500 ${onTarget ? 'text-emerald-600' : 'text-amber-600'}`}>{pct}%</span>
+                            <span className="text-xs font-500 text-slate-900">${(store.revenue / 1000).toFixed(0)}K</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${onTarget ? 'bg-emerald-500' : 'bg-amber-400'}`}
+                            style={{ width: `${Math.min(pct, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-        </div>
+              )}
+
+              {/* Widget Mới: Top Products */}
+              {widget.id === 'top-products' && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400">
+                        <th className="pb-2 font-600 uppercase">Product Name</th>
+                        <th className="pb-2 font-600 uppercase text-right">Category</th>
+                        <th className="pb-2 font-600 uppercase text-right">Revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Dùng mock data cơ bản giả lập topProducts */}
+                      {[
+                        { id: 1, name: 'Lego City Police Station', cat: 'Toys', rev: '$24,500' },
+                        { id: 2, name: 'Monopoly Classic', cat: 'Board Games', rev: '$18,200' },
+                        { id: 3, name: 'Nerf Elite Blaster', cat: 'Outdoor', rev: '$15,400' },
+                      ].map((item, i) => (
+                        <tr key={item.id} className="border-b border-slate-50 last:border-0">
+                          <td className="py-2.5 font-500 text-slate-900 flex items-center gap-2">
+                            <span className="text-slate-400 w-3">{i + 1}</span> {item.name}
+                          </td>
+                          <td className="py-2.5 text-right text-slate-500">{item.cat}</td>
+                          <td className="py-2.5 text-right font-600 text-emerald-600">{item.rev}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

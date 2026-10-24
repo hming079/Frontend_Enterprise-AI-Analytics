@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   Search, Plus, MoreHorizontal, Edit, Shield, UserX, UserCheck,
-  KeyRound, Eye, X, Users, Database, Layers, MapPin, Table as TableIcon, Columns, Save, Lock
+  KeyRound, Eye, X, Users, Database, Layers, MapPin, Table as TableIcon, Columns, Save, Lock, UserPlus, Check
 } from 'lucide-react';
 import { users, type User, type UserRole } from '../../data/mock';
 
@@ -38,7 +38,15 @@ export default function UserManagement() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
-  const [activeTab, setActiveTab] = useState<'users' | 'permissions' | 'data-scope'>('users');
+
+  // Thêm 'pending' vào state quản lý Tab
+  const [activeTab, setActiveTab] = useState<'users' | 'permissions' | 'data-scope' | 'pending'>('users');
+
+  // State mock data cho danh sách tài khoản cần duyệt
+  const [pendingUsers, setPendingUsers] = useState([
+    { id: 'p1', name: 'Nguyen Van A', email: 'a.nguyen@example.com', department: 'Sales', requestDate: '2026-10-23' },
+    { id: 'p2', name: 'Tran Thi B', email: 'b.tran@example.com', department: 'Marketing', requestDate: '2026-10-22' }
+  ]);
 
   // State quản lý việc Edit Data Scope
   const [isEditingData, setIsEditingData] = useState(false);
@@ -55,7 +63,6 @@ export default function UserManagement() {
     return matchSearch && matchRole;
   });
 
-  // Khởi tạo data khi bấm Edit
   const handleStartEdit = () => {
     setEditFormData({
       schemas: (selectedUser?.allowedSchemas || ['Sales DB']).join(', '),
@@ -66,11 +73,8 @@ export default function UserManagement() {
     setIsEditingData(true);
   };
 
-  // Lưu cấu hình Data Scope
   const handleSaveEdit = () => {
     if (!selectedUser) return;
-
-    // Parse chuỗi thành mảng
     const updatedUser: AppUser = {
       ...selectedUser,
       allowedSchemas: editFormData.schemas.split(',').map(s => s.trim()).filter(Boolean),
@@ -78,12 +82,19 @@ export default function UserManagement() {
       restrictedColumns: editFormData.columns.split(',').map(s => s.trim()).filter(Boolean),
       rlsFilter: editFormData.rls.trim(),
     };
-
     setSelectedUser(updatedUser);
     setIsEditingData(false);
+  };
 
-    // Trong thực tế sẽ gọi API update user ở đây
-    // updateUserData(updatedUser);
+  // Xử lý Duyệt / Từ chối tài khoản
+  const handleApprove = (id: string) => {
+    setPendingUsers(prev => prev.filter(user => user.id !== id));
+    // Call API to approve user here
+  };
+
+  const handleReject = (id: string) => {
+    setPendingUsers(prev => prev.filter(user => user.id !== id));
+    // Call API to reject user here
   };
 
   return (
@@ -103,6 +114,7 @@ export default function UserManagement() {
       <div className="flex items-center gap-1 border-b border-slate-200">
         {[
           { id: 'users', label: 'User List', icon: Users },
+          { id: 'pending', label: `Pending Approvals (${pendingUsers.length})`, icon: UserPlus },
           { id: 'permissions', label: 'Feature Permissions', icon: Shield },
           { id: 'data-scope', label: 'Data Access Control', icon: Database },
         ].map(tab => {
@@ -120,11 +132,62 @@ export default function UserManagement() {
         })}
       </div>
 
+      {/* ─── TAB: PENDING APPROVALS ──────────────────────────────────────────────── */}
+      {activeTab === 'pending' && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          {pendingUsers.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-sm">
+              No pending accounts require approval at this time.
+            </div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-4 py-3 text-left text-[10px] font-600 text-slate-500 uppercase tracking-wide">Applicant Info</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-600 text-slate-500 uppercase tracking-wide">Department</th>
+                  <th className="px-4 py-3 text-left text-[10px] font-600 text-slate-500 uppercase tracking-wide">Request Date</th>
+                  <th className="px-4 py-3 text-right text-[10px] font-600 text-slate-500 uppercase tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingUsers.map(user => (
+                  <tr key={user.id} className="border-t border-slate-50 hover:bg-slate-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div>
+                        <p className="font-500 text-slate-900">{user.name}</p>
+                        <p className="text-[11px] text-slate-400">{user.email}</p>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">{user.department}</td>
+                    <td className="px-4 py-3 text-slate-500">{user.requestDate}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleReject(user.id)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-500 text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+                        >
+                          <X size={14} /> Reject
+                        </button>
+                        <button
+                          onClick={() => handleApprove(user.id)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-500 text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-md transition-colors"
+                        >
+                          <Check size={14} /> Approve
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {/* ─── TAB 1: USER LIST ────────────────────────────────────────────────── */}
       {activeTab === 'users' && (
         <div className="flex gap-4">
           <div className="flex-1 space-y-4">
-            {/* Filters */}
             <div className="flex items-center gap-3">
               <div className="relative">
                 <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -148,7 +211,6 @@ export default function UserManagement() {
               </div>
             </div>
 
-            {/* Table */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
               <table className="w-full text-xs">
                 <thead>
@@ -202,7 +264,6 @@ export default function UserManagement() {
             </div>
           </div>
 
-          {/* User Detail Drawer */}
           {selectedUser && (
             <div className="w-96 flex-shrink-0 bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col animate-slide-down">
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
@@ -224,7 +285,6 @@ export default function UserManagement() {
                   </div>
                 </div>
 
-                {/* Phân quyền Dữ liệu (Edit/View Mode) */}
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-xs font-600 text-slate-900 flex items-center gap-1.5">
@@ -248,7 +308,6 @@ export default function UserManagement() {
 
                   {!isEditingData ? (
                     <div className="space-y-4">
-                      {/* View Mode */}
                       <div>
                         <p className="text-[10px] text-slate-500 uppercase tracking-wide font-600 mb-1.5">Allowed Schemas</p>
                         <div className="flex flex-wrap gap-1.5">
@@ -294,7 +353,6 @@ export default function UserManagement() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {/* Edit Mode */}
                       <div>
                         <label className="text-[10px] text-slate-500 uppercase tracking-wide font-600 mb-1 block">Schemas (Comma separated)</label>
                         <input
@@ -332,10 +390,9 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* ─── TAB 2: FEATURE PERMISSIONS ──────────────────────────────────────── */}
+      {/* ─── TAB 2 & 3: PERMISSIONS & DATA SCOPE (Gữ nguyên) ──────────────────────── */}
       {activeTab === 'permissions' && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          {/* Giữ nguyên như code cũ */}
           <div className="px-5 py-4 border-b border-slate-100">
             <h3 className="text-sm font-600 text-slate-900">Role Permission Matrix</h3>
             <p className="text-xs text-slate-400 mt-0.5">Application feature access control by role</p>
@@ -380,7 +437,6 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* ─── TAB 3: DATA ACCESS SCOPE (Policy Overview) ──────────────────────── */}
       {activeTab === 'data-scope' && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-200 p-6">
@@ -390,36 +446,16 @@ export default function UserManagement() {
                 Overview of default data access policies per role. These policies dictate which databases, tables, and columns users can query via AI, and enforce Row-Level Security (RLS) to restrict data visibility. Admins can override these per user in the User Profile Drawer.
               </p>
             </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               {[
-                {
-                  role: 'System Administrator', color: 'border-red-200 bg-red-50', badge: 'bg-red-100 text-red-700',
-                  schema: 'All Databases (*)',
-                  table: 'All Tables (*)',
-                  column: 'No Restrictions',
-                  rls: 'Bypass all Filters',
-                },
-                {
-                  role: 'Business Manager', color: 'border-violet-200 bg-violet-50', badge: 'bg-violet-100 text-violet-700',
-                  schema: 'Sales DB, Inventory DB',
-                  table: 'sales, inventory, stores',
-                  column: 'Restricted: employee_salary, margins',
-                  rls: "region_id IN ('assigned_regions')",
-                },
-                {
-                  role: 'Business User', color: 'border-indigo-200 bg-indigo-50', badge: 'bg-indigo-100 text-indigo-700',
-                  schema: 'Sales DB (Views Only)',
-                  table: 'sales_aggregated_view',
-                  column: 'Restricted: customer_pii, costs',
-                  rls: "store_id IN ('assigned_stores')",
-                },
+                { role: 'System Administrator', color: 'border-red-200 bg-red-50', badge: 'bg-red-100 text-red-700', schema: 'All Databases (*)', table: 'All Tables (*)', column: 'No Restrictions', rls: 'Bypass all Filters' },
+                { role: 'Business Manager', color: 'border-violet-200 bg-violet-50', badge: 'bg-violet-100 text-violet-700', schema: 'Sales DB, Inventory DB', table: 'sales, inventory, stores', column: 'Restricted: employee_salary, margins', rls: "region_id IN ('assigned_regions')" },
+                { role: 'Business User', color: 'border-indigo-200 bg-indigo-50', badge: 'bg-indigo-100 text-indigo-700', schema: 'Sales DB (Views Only)', table: 'sales_aggregated_view', column: 'Restricted: customer_pii, costs', rls: "store_id IN ('assigned_stores')" },
               ].map(item => (
                 <div key={item.role} className={`rounded-xl border p-5 ${item.color} flex flex-col`}>
                   <div className="mb-4">
                     <span className={`text-[10px] font-600 px-2 py-1 rounded-full ${item.badge}`}>{item.role}</span>
                   </div>
-
                   <div className="flex-1 space-y-3">
                     <div>
                       <p className="text-[10px] text-slate-500 uppercase tracking-wider font-600 mb-1">Schema & Table Access</p>

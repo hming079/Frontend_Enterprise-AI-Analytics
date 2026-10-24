@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Brain, Send, ChevronRight, Copy, Pin, Download, ThumbsUp, ThumbsDown,
   CheckCircle, XCircle, RotateCcw, Play, Clock, Plus, Search, MoreHorizontal,
-  Trash2, Star, ChevronLeft, Code, BarChart3, Table, Sparkles, X, AlertTriangle, ChevronDown
+  Trash2, Star, Code, BarChart3, Table, Sparkles, X, ChevronDown
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -28,6 +28,7 @@ interface Session {
   sql: string;
   status: 'success' | 'corrected' | 'failed';
   pinned: boolean;
+  pinnedDashboard?: string;
 }
 
 // ─── Mock Databases ──────────────────────────────────────────────────────────
@@ -56,7 +57,6 @@ const historyLast30: HistoryItem[] = [
   { id: 'q8', question: 'Sản phẩm nào có doanh thu giảm mạnh nhất?', time: 'Nov 5', status: 'corrected', pinned: false },
 ];
 
-// Mock sessions keyed by history id
 const sessionsByHistory: Record<string, Partial<Session>> = {
   q1: {
     question: 'Doanh thu tháng 8/2026 của chi nhánh Quận 1',
@@ -64,6 +64,7 @@ const sessionsByHistory: Record<string, Partial<Session>> = {
     sql: `SELECT store_name, SUM(revenue) AS total_revenue\nFROM sales\nJOIN stores ON sales.store_id = stores.store_id\nWHERE store_name LIKE '%Quận 1%'\n  AND MONTH(date) = 8 AND YEAR(date) = 2026\nGROUP BY store_name;`,
     status: 'success',
     pinned: true,
+    pinnedDashboard: 'Executive Overview',
   },
   q2: {
     question: 'Top 10 sản phẩm bán chạy hôm nay',
@@ -74,8 +75,6 @@ const sessionsByHistory: Record<string, Partial<Session>> = {
   },
 };
 
-// ─── Suggestions ─────────────────────────────────────────────────────────────
-
 const suggestions = [
   'Doanh thu theo từng cửa hàng trong quý này?',
   'Top 10 sản phẩm bán chạy nhất tháng này?',
@@ -84,8 +83,6 @@ const suggestions = [
   'Cửa hàng nào có hiệu suất tốt nhất Q4?',
   'Tổng doanh thu theo danh mục sản phẩm?',
 ];
-
-// ─── Process steps ───────────────────────────────────────────────────────────
 
 const processSteps: { id: ProcessStep; label: string; detail: string }[] = [
   { id: 'understanding', label: 'Understanding question', detail: 'Parsing intent and business context' },
@@ -145,7 +142,6 @@ function HistoryDrawer({ open, onClose, onSelectItem, activeId }: HistoryDrawerP
   const last30Filtered = filterItems(historyLast30);
   const hasAny = todayFiltered.length + last7Filtered.length + last30Filtered.length > 0;
 
-  // Close menu when clicking outside
   useEffect(() => {
     if (!menuOpenId) return;
     const handler = () => setMenuOpenId(null);
@@ -153,7 +149,6 @@ function HistoryDrawer({ open, onClose, onSelectItem, activeId }: HistoryDrawerP
     return () => document.removeEventListener('click', handler);
   }, [menuOpenId]);
 
-  // Escape to close drawer
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && open) onClose(); };
     document.addEventListener('keydown', handler);
@@ -174,7 +169,8 @@ function HistoryDrawer({ open, onClose, onSelectItem, activeId }: HistoryDrawerP
                   }`}
               >
                 <div className="flex items-start justify-between w-full gap-2">
-                  <p className={`text-xs leading-snug line-clamp-2 flex-1 ${activeId === item.id ? 'text-indigo-700 font-500' : 'text-slate-700'}`}>
+                  <p className={`text-xs leading-snug line-clamp-2 flex-1 ${activeId === item.id ? 'text-indigo-700 font-500' : 'text-slate-700'
+                    }`}>
                     {item.question}
                   </p>
                   {item.pinned && (
@@ -187,7 +183,6 @@ function HistoryDrawer({ open, onClose, onSelectItem, activeId }: HistoryDrawerP
                 </div>
               </button>
 
-              {/* Hover action button */}
               <button
                 onClick={e => { e.stopPropagation(); setMenuOpenId(menuOpenId === item.id ? null : item.id); }}
                 className="absolute right-2 top-2.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-opacity"
@@ -195,7 +190,6 @@ function HistoryDrawer({ open, onClose, onSelectItem, activeId }: HistoryDrawerP
                 <MoreHorizontal size={13} />
               </button>
 
-              {/* Context menu */}
               {menuOpenId === item.id && (
                 <div
                   className="absolute right-2 top-8 z-20 bg-white border border-slate-200 rounded-xl shadow-lg py-1 w-36 animate-slide-down"
@@ -206,20 +200,23 @@ function HistoryDrawer({ open, onClose, onSelectItem, activeId }: HistoryDrawerP
                     { label: item.pinned ? 'Unpin' : 'Pin', icon: Star, action: () => setMenuOpenId(null) },
                     { label: 'Rename', icon: CheckCircle, action: () => setMenuOpenId(null) },
                     { label: 'Delete', icon: Trash2, action: () => { setDeleteTarget(item.id); setMenuOpenId(null); }, danger: true },
-                  ].map(opt => (
-                    <button
-                      key={opt.label}
-                      onClick={opt.action}
-                      className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-50 text-left ${opt.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700'}`}
-                    >
-                      <opt.icon size={12} />
-                      {opt.label}
-                    </button>
-                  ))}
+                  ].map(opt => {
+                    const Icon = opt.icon;
+                    return (
+                      <button
+                        key={opt.label}
+                        onClick={opt.action}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-slate-50 text-left ${opt.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700'
+                          }`}
+                      >
+                        <Icon size={12} />
+                        {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
-              {/* Delete confirmation */}
               {deleteTarget === item.id && (
                 <div className="mx-3 mb-1 p-3 bg-red-50 border border-red-200 rounded-xl">
                   <p className="text-xs text-red-700 font-500 mb-2">Delete this query?</p>
@@ -241,23 +238,17 @@ function HistoryDrawer({ open, onClose, onSelectItem, activeId }: HistoryDrawerP
       className={`flex-shrink-0 border-r border-slate-200 bg-white flex flex-col overflow-hidden transition-all duration-200 ease-in-out`}
       style={{ width: open ? 280 : 0 }}
     >
-      {/* Inner — always 280px wide so content doesn't collapse during animation */}
       <div className="w-[280px] flex flex-col h-full">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 flex-shrink-0">
           <div>
             <p className="text-xs font-600 text-slate-900">Query History</p>
             <p className="text-[10px] text-slate-400">Lịch sử các truy vấn dữ liệu</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"
-          >
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
             <X size={14} />
           </button>
         </div>
 
-        {/* Search */}
         <div className="px-3 py-2.5 border-b border-slate-100 flex-shrink-0">
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -270,7 +261,6 @@ function HistoryDrawer({ open, onClose, onSelectItem, activeId }: HistoryDrawerP
           </div>
         </div>
 
-        {/* List */}
         <div className="flex-1 overflow-y-auto py-2">
           {hasAny ? (
             <>
@@ -316,6 +306,7 @@ function ProcessingTimeline({ step, question }: { step: ProcessStep; question: s
           <p className="text-red-600">Column 'revenue_total' does not exist. AI đang tự sửa lỗi...</p>
         </div>
       )}
+
       {isCorrect && (
         <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs">
           <div className="flex items-center gap-1.5 mb-0.5">
@@ -337,7 +328,7 @@ function ProcessingTimeline({ step, question }: { step: ProcessStep; question: s
             <div key={s.id} className="flex items-start gap-3">
               <div className="flex flex-col items-center flex-shrink-0">
                 <div className={`w-5 h-5 rounded-full flex items-center justify-center ${st === 'done' ? 'bg-emerald-100' :
-                  st === 'active' ? 'bg-indigo-100' : 'bg-slate-100'
+                    st === 'active' ? 'bg-indigo-100' : 'bg-slate-100'
                   }`}>
                   {st === 'done' && <CheckCircle size={11} className="text-emerald-600" />}
                   {st === 'active' && <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />}
@@ -349,7 +340,7 @@ function ProcessingTimeline({ step, question }: { step: ProcessStep; question: s
               </div>
               <div className="pb-0.5 min-w-0">
                 <p className={`text-xs font-500 ${st === 'done' ? 'text-emerald-700' :
-                  st === 'active' ? 'text-indigo-700' : 'text-slate-400'
+                    st === 'active' ? 'text-indigo-700' : 'text-slate-400'
                   }`}>{s.label}</p>
                 {st !== 'pending' && (
                   <p className="text-[10px] text-slate-400 truncate">{s.detail}</p>
@@ -365,9 +356,23 @@ function ProcessingTimeline({ step, question }: { step: ProcessStep; question: s
 
 // ─── Query Result ─────────────────────────────────────────────────────────────
 
-function QueryResult({ session, onTogglePin }: { session: Session; onTogglePin: () => void }) {
+function QueryResult({ session, onTogglePin }: { session: Session; onTogglePin: (dashboardName?: string) => void }) {
   const [tab, setTab] = useState<'chart' | 'table' | 'sql'>('chart');
   const [copied, setCopied] = useState(false);
+  const [pinMenuOpen, setPinMenuOpen] = useState(false);
+  const pinMenuRef = useRef<HTMLDivElement>(null);
+
+  const mockDashboards = ['Executive Overview', 'Sales Performance', 'Marketing Analytics'];
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (pinMenuRef.current && !pinMenuRef.current.contains(e.target as Node)) {
+        setPinMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const copy = () => {
     navigator.clipboard.writeText(session.sql);
@@ -377,7 +382,6 @@ function QueryResult({ session, onTogglePin }: { session: Session; onTogglePin: 
 
   return (
     <div className="space-y-3 animate-fade-in">
-      {/* Self-correction notice */}
       {session.status === 'corrected' && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-xs">
           <RotateCcw size={13} className="text-amber-600 flex-shrink-0" />
@@ -387,7 +391,6 @@ function QueryResult({ session, onTogglePin }: { session: Session; onTogglePin: 
         </div>
       )}
 
-      {/* AI Answer */}
       <div className="bg-white border border-slate-200 rounded-xl p-4">
         <div className="flex items-start gap-3">
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center flex-shrink-0">
@@ -402,7 +405,6 @@ function QueryResult({ session, onTogglePin }: { session: Session; onTogglePin: 
               <span className="text-[10px] text-slate-400">6 rows · 1.2s</span>
             </div>
             <p className="text-sm text-slate-700 leading-relaxed">
-              {/* Render lightweight bold */}
               {session.answer.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
                 part.startsWith('**') ? (
                   <strong key={i} className="text-slate-900 font-600">{part.slice(2, -2)}</strong>
@@ -413,25 +415,26 @@ function QueryResult({ session, onTogglePin }: { session: Session; onTogglePin: 
         </div>
       </div>
 
-      {/* Tabs + Result */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <div className="flex items-center border-b border-slate-100 px-4">
           {([
             { id: 'chart', label: 'Chart', icon: BarChart3 },
             { id: 'table', label: 'Table', icon: Table },
             { id: 'sql', label: 'SQL', icon: Code },
-          ] as const).map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-500 border-b-2 transition-colors ${tab === t.id
-                ? 'border-indigo-600 text-indigo-700'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}
-            >
-              <t.icon size={13} />{t.label}
-            </button>
-          ))}
+          ] as const).map(t => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-1.5 px-4 py-3 text-xs font-500 border-b-2 transition-colors ${tab === t.id ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+              >
+                <Icon size={13} />
+                {t.label}
+              </button>
+            );
+          })}
           <div className="ml-auto py-2">
             <select className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
               <option>Bar Chart</option>
@@ -539,20 +542,52 @@ function QueryResult({ session, onTogglePin }: { session: Session; onTogglePin: 
               <ThumbsDown size={12} />
             </button>
           </div>
+
           <div className="ml-auto flex items-center gap-2">
             <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 font-500">
               <Download size={12} />Export
             </button>
-            <button
-              onClick={onTogglePin}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-500 transition-colors ${session.pinned
-                ? 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                }`}
-            >
-              <Pin size={12} />
-              {session.pinned ? '✓ Pinned to Dashboard' : 'Pin to Dashboard'}
-            </button>
+
+            {/* Dashboard Pin Selector */}
+            <div className="relative" ref={pinMenuRef}>
+              <button
+                onClick={() => {
+                  if (session.pinned) {
+                    onTogglePin();
+                  } else {
+                    setPinMenuOpen(!pinMenuOpen);
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg font-500 transition-colors ${session.pinned
+                    ? 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  }`}
+              >
+                <Pin size={12} />
+                {session.pinned ? `✓ Pinned to ${session.pinnedDashboard || 'Dashboard'}` : 'Pin to Dashboard'}
+              </button>
+
+              {/* Dropdown Menu */}
+              {pinMenuOpen && !session.pinned && (
+                <div className="absolute right-0 bottom-full mb-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg py-1 z-10 animate-fade-in">
+                  <div className="px-3 py-2 border-b border-slate-100">
+                    <p className="text-[10px] font-600 text-slate-500 uppercase tracking-wider">Select Dashboard</p>
+                  </div>
+                  {mockDashboards.map(db => (
+                    <button
+                      key={db}
+                      onClick={() => {
+                        onTogglePin(db);
+                        setPinMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors"
+                    >
+                      {db}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -651,9 +686,9 @@ export default function AIQueryPage() {
         sql: s.sql ?? defaultSession.sql,
         status: s.status ?? 'success',
         pinned: s.pinned ?? item.pinned,
+        pinnedDashboard: s.pinnedDashboard,
       });
     } else {
-      // Restore with default session for demo
       setSubmittedQ(item.question);
       setStep('done');
       setSession({ ...defaultSession, question: item.question, status: item.status, pinned: item.pinned });
@@ -668,8 +703,14 @@ export default function AIQueryPage() {
     textareaRef.current?.focus();
   };
 
-  const handleTogglePin = () => {
-    if (session) setSession(s => s ? { ...s, pinned: !s.pinned } : s);
+  const handleTogglePin = (dashboardName?: string) => {
+    if (session) {
+      setSession(s => s ? {
+        ...s,
+        pinned: !s.pinned,
+        pinnedDashboard: s.pinned ? undefined : dashboardName
+      } : s);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -681,7 +722,6 @@ export default function AIQueryPage() {
 
   return (
     <div className="flex h-full min-h-0">
-      {/* History Drawer */}
       <HistoryDrawer
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
@@ -689,10 +729,7 @@ export default function AIQueryPage() {
         activeId={activeHistoryId}
       />
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-
-        {/* Sub-header */}
         <div className="flex items-center gap-3 px-5 py-2.5 border-b border-slate-100 bg-white flex-shrink-0">
           <div className="flex items-center gap-1.5 text-xs text-emerald-600">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -709,12 +746,11 @@ export default function AIQueryPage() {
             </select>
             <ChevronDown size={12} className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-emerald-600 group-hover:text-emerald-700" />
           </div>
+
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={() => setHistoryOpen(o => !o)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-500 rounded-lg border transition-colors ${historyOpen
-                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-500 rounded-lg border transition-colors ${historyOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
             >
               <Clock size={13} />
@@ -730,7 +766,6 @@ export default function AIQueryPage() {
           </div>
         </div>
 
-        {/* Scrollable result area */}
         <div className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-5 py-5">
             {step === 'idle' && !session && (
@@ -739,7 +774,6 @@ export default function AIQueryPage() {
 
             {isProcessing && (
               <div className="animate-fade-in">
-                {/* User question bubble */}
                 <div className="flex justify-end mb-4">
                   <div className="bg-indigo-600 text-white text-sm px-4 py-3 rounded-2xl rounded-tr-sm max-w-md leading-relaxed">
                     {submittedQ}
@@ -751,7 +785,6 @@ export default function AIQueryPage() {
 
             {step === 'done' && session && (
               <div className="animate-fade-in space-y-4">
-                {/* User question */}
                 <div className="flex justify-end">
                   <div className="bg-indigo-600 text-white text-sm px-4 py-3 rounded-2xl rounded-tr-sm max-w-md leading-relaxed">
                     {session.question}
@@ -763,7 +796,6 @@ export default function AIQueryPage() {
           </div>
         </div>
 
-        {/* Fixed input bar */}
         <div className="border-t border-slate-200 bg-white px-5 py-4 flex-shrink-0">
           <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
             <div className="relative">
